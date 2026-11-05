@@ -241,26 +241,34 @@ function showDetails(a) {
     const container = document.getElementById("details");
     container.replaceChildren();
 
-    const fields = [
-        ["Name", a.applicant_name],
-        ["Date of birth", a.date_of_birth],
-        ["Gender", a.gender],
-        ["Phone", a.phone],
-        ["Email", a.email],
-        ["State", a.state],
-        ["District", a.district],
-        ["PIN code", a.pin_code],
-        ["Category", a.sport_category],
-        ["Sport", a.sport],
-        ["Position / Event", a.position_or_event],
-        ["Experience", a.experience],
-        ["Academy / Club", a.school_academy_club],
-        ["Coach", a.coach_name],
-        ["Achievements", a.achievements],
-        ["Performance video", a.performance_video],
-        ["Goals", a.goals],
-        ["Guardian consent", a.parent_guardian_consent ? "Yes" : "No"]
-    ];
+    
+const fields = [
+    ["Athlete ID", "NGS-" + String(a.id).padStart(5, "0")],
+    ["Application Status", a.status.toUpperCase()],
+    ["Registration Date", new Date(a.created_at).toLocaleDateString()],
+
+    ["Name", a.applicant_name],
+    ["Date of birth", a.date_of_birth],
+    ["Gender", a.gender],
+    ["Phone", a.phone],
+    ["Email", a.email],
+    ["State", a.state],
+    ["District", a.district],
+    ["PIN code", a.pin_code],
+
+    ["Category", a.sport_category],
+    ["Sport", a.sport],
+    ["Position / Event", a.position_or_event],
+    ["Experience", a.experience],
+    ["Academy / Club", a.school_academy_club],
+    ["Coach", a.coach_name],
+
+    ["Achievements", a.achievements],
+    ["Performance video", a.performance_video],
+    ["Goals", a.goals],
+
+    ["Guardian consent", a.parent_guardian_consent ? "Yes" : "No"]
+];
 
     fields.forEach(([label, value]) => {
         const p = document.createElement("p");
