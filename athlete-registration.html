@@ -140,44 +140,178 @@
 
   <footer>© <span id="year"></span> NEXTGEN SPORTS · DISCOVER. DEVELOP. DOMINATE.</footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
+    // 1. Supabase connection
+    const SUPABASE_URL = "PASTE_YOUR_PROJECT_URL";
+    const SUPABASE_KEY = "PASTE_YOUR_PUBLISHABLE_KEY";
+
+    const supabaseClient = window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_KEY
+    );
+
+    // 2. Sport category options
     const sportOptions = {
-      "Indoor Sports": ["Badminton", "Table Tennis", "Boxing", "Wrestling", "Gymnastics", "Squash", "Shooting"],
-      "Outdoor Sports": ["Cricket", "Football", "Athletics", "Hockey", "Volleyball", "Basketball", "Kabaddi"],
-      "Mind Sports": ["Chess", "Carrom", "Billiards", "Snooker"]
+        "Indoor Sports": [
+            "Badminton", "Table Tennis", "Boxing",
+            "Wrestling", "Gymnastics", "Squash", "Shooting"
+        ],
+        "Outdoor Sports": [
+            "Cricket", "Football", "Athletics",
+            "Hockey", "Volleyball", "Basketball", "Kabaddi"
+        ],
+        "Mind Sports": [
+            "Chess", "Carrom", "Billiards", "Snooker"
+        ]
     };
 
     const category = document.getElementById("category");
     const sport = document.getElementById("sport");
+
     category.addEventListener("change", () => {
-      sport.innerHTML = '<option value="">Select sport</option>';
-      (sportOptions[category.value] || []).forEach(name => {
-        const option = document.createElement("option");
-        option.value = name;
-        option.textContent = name;
-        sport.appendChild(option);
-      });
+        sport.innerHTML = '<option value="">Select sport</option>';
+
+        (sportOptions[category.value] || []).forEach(name => {
+            const option = document.createElement("option");
+            option.value = name;
+            option.textContent = name;
+            sport.appendChild(option);
+        });
     });
 
-    document.getElementById("year").textContent = new Date().getFullYear();
+    // 3. Display current year
+    document.getElementById("year").textContent =
+        new Date().getFullYear();
 
-    document.getElementById("athleteForm").addEventListener("submit", event => {
-      event.preventDefault();
-      const dobValue = document.getElementById("dob").value;
-      if (dobValue && new Date(dobValue + "T00:00:00") > new Date()) {
-        alert("Date of birth cannot be in the future.");
-        return;
-      }
-      const age = dobValue ? Math.floor((Date.now() - new Date(dobValue + "T00:00:00").getTime()) / 31557600000) : null;
-      if (age !== null && age < 18 && !document.getElementById("guardian").checked) {
-        alert("Please confirm that parent or legal-guardian consent has been obtained for an athlete under 18.");
-        return;
-      }
-      const notice = document.getElementById("notice");
-      notice.style.display = "block";
-      notice.textContent = "Your form is ready, but it is not connected to the NEXTGEN SPORTS database yet. No application has been stored or sent. The next step is to connect this form securely to Supabase.";
-      notice.scrollIntoView({ behavior: "smooth", block: "center" });
+    // 4. Calculate athlete age
+    function calculateAge(dateString) {
+        const dob = new Date(dateString + "T00:00:00");
+        const today = new Date();
+
+        let age = today.getFullYear() - dob.getFullYear();
+
+        const birthdayNotReached =
+            today.getMonth() < dob.getMonth() ||
+            (today.getMonth() === dob.getMonth() &&
+             today.getDate() < dob.getDate());
+
+        if (birthdayNotReached) age--;
+
+        return age;
+    }
+
+    // 5. Submit application to Supabase
+    const form = document.getElementById("athleteForm");
+    const notice = document.getElementById("notice");
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const dobValue = document.getElementById("dob").value;
+
+        if (!dobValue) {
+            alert("Please enter your date of birth.");
+            return;
+        }
+
+        const dobDate = new Date(dobValue + "T00:00:00");
+
+        if (Number.isNaN(dobDate.getTime()) ||
+            dobDate > new Date()) {
+            alert("Please enter a valid date of birth.");
+            return;
+        }
+
+        const age = calculateAge(dobValue);
+        const guardianConsent =
+            document.getElementById("guardian").checked;
+
+        if (age < 18 && !guardianConsent) {
+            alert(
+                "Parent or legal-guardian consent is required for athletes under 18."
+            );
+            return;
+        }
+
+        if (!document.getElementById("accuracy").checked) {
+            alert("Please confirm the declaration.");
+            return;
+        }
+
+        const application = {
+            applicant_name: document.getElementById("fullName").value.trim(),
+            date_of_birth: dobValue,
+            gender: document.getElementById("gender").value,
+            phone: document.getElementById("phone").value.trim(),
+            email: document.getElementById("email").value.trim() || null,
+            state: document.getElementById("state").value.trim(),
+            district: document.getElementById("district").value.trim(),
+            pin_code: document.getElementById("pinCode").value.trim() || null,
+            sport_category: category.value,
+            sport: sport.value,
+            position_or_event: document.getElementById("position").value.trim(),
+            experience: document.getElementById("experience").value,
+            school_academy_club: document.getElementById("academy").value.trim(),
+            coach_name: document.getElementById("coach").value.trim(),
+            achievements: document.getElementById("achievements").value.trim(),
+            performance_video: document.getElementById("videoLink").value.trim() || null,
+            goals: document.getElementById("about").value.trim(),
+            parent_guardian_consent: guardianConsent,
+            application_data: {
+                accuracy_confirmed: true,
+                athlete_age_at_submission: age
+            },
+            status: "pending"
+        };
+
+        submitButton.disabled = true;
+        submitButton.textContent = "SUBMITTING...";
+
+        notice.style.display = "block";
+        notice.textContent = "Submitting your application securely...";
+
+        try {
+            const { error } = await supabaseClient
+                .from("athlete_applications")
+                .insert([application]);
+
+            if (error) {
+                throw error;
+            }
+
+            notice.textContent =
+                "SUCCESS! Your athlete application has been submitted to NEXTGEN SPORTS.";
+
+            notice.scrollIntoView({
+                behavior: "smooth",
+                block: "center"
+            });
+
+            form.reset();
+
+            // Reset sport dropdown
+            sport.innerHTML =
+                '<option value="">Select category first</option>';
+
+        } catch (error) {
+            console.error("Supabase submission error:", error);
+
+            notice.textContent =
+                "Application submission failed. Please try again. " +
+                error.message;
+
+            notice.scrollIntoView({
+                behavior: "smooth",
+                block: "center"
+            });
+
+        } finally {
+            submitButton.disabled = false;
+            submitButton.textContent = "SUBMIT ATHLETE APPLICATION";
+        }
     });
   </script>
-</body>
+ </body>
 </html>
