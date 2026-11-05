@@ -1,1 +1,297 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXTGEN SPORTS | Admin Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#080808;color:#fff;font-family:Arial,sans-serif}
+header{padding:22px 6%;border-bottom:1px solid #b99545;display:flex;justify-content:space-between;align-items:center}
+h1{color:#d6ad54;font-size:23px;margin:0}
+button{background:#c49b45;color:#080808;border:0;padding:11px 18px;font-weight:bold;cursor:pointer;border-radius:4px}
+button:hover{background:#e2c477}
+input,select{padding:12px;background:#171717;color:white;border:1px solid #555;border-radius:4px;width:100%;margin:7px 0}
+main{max-width:1100px;margin:35px auto;padding:0 18px}
+.panel{background:#121212;border:1px solid #333;padding:24px;border-radius:8px;margin-bottom:22px}
+h2{color:#d6ad54}
+#loginPanel{max-width:430px;margin:70px auto}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.stat{background:#171717;border:1px solid #555;padding:20px;border-radius:7px}
+.stat strong{display:block;color:#d6ad54;font-size:28px;margin-top:10px}
+table{width:100%;border-collapse:collapse;min-width:750px}
+th,td{text-align:left;padding:13px;border-bottom:1px solid #333;font-size:14px}
+th{color:#d6ad54}
+.tableWrap{overflow-x:auto}
+.small{font-size:13px;color:#aaa}
+#dashboard{display:none}
+#notice{margin-top:12px;color:#e2c477}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.actions button{padding:8px 11px;font-size:12px}
+@media(max-width:650px){.stats{grid-template-columns:repeat(2,1fr)}header{padding:18px}h1{font-size:18px}}
+</style>
+</head>
+<body>
+
+<header>
+<h1>NEXTGEN SPORTS | ADMIN</h1>
+<button id="logoutBtn" style="display:none">LOGOUT</button>
+</header>
+
+<main>
+<section id="loginPanel" class="panel">
+<h2>Admin Login</h2>
+<p class="small">Sign in with your authorized administrator account.</p>
+<input type="email" id="email" placeholder="Admin email">
+<input type="password" id="password" placeholder="Password">
+<button id="loginBtn">LOGIN</button>
+<p id="notice"></p>
+</section>
+
+<section id="dashboard">
+<div class="panel">
+<h2>Dashboard Overview</h2>
+<div class="stats">
+<div class="stat">Total Applications<strong id="total">0</strong></div>
+<div class="stat">Pending<strong id="pending">0</strong></div>
+<div class="stat">Approved<strong id="approved">0</strong></div>
+<div class="stat">Rejected<strong id="rejected">0</strong></div>
+</div>
+</div>
+
+<div class="panel">
+<h2>Athlete Applications</h2>
+<input type="search" id="search" placeholder="Search by athlete name or sport">
+<select id="statusFilter">
+<option value="all">All Applications</option>
+<option value="pending">Pending</option>
+<option value="reviewing">Reviewing</option>
+<option value="approved">Approved</option>
+<option value="rejected">Rejected</option>
+</select>
+<p id="listNotice" class="small"></p>
+<div class="tableWrap">
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Sport</th>
+<th>State</th>
+<th>Date</th>
+<th>Status</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody id="applications"></tbody>
+</table>
+</div>
+</div>
+
+<div class="panel" id="detailsPanel" style="display:none">
+<h2>Application Details</h2>
+<div id="details"></div>
+</div>
+</section>
+</main>
+
+<script>
+const SUPABASE_URL = "https://seeezqetszszpfemyjhn.supabase.co";
+const SUPABASE_KEY = "sb_publishable_OOfkOOhrGX_wQYJZOw8OZA_Jbh1btTb";
+
+const ADMIN_UID = "9ea99d73-9947-463f-98e2-239008c23f9f";
+
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let allApplications = [];
+
+const loginPanel = document.getElementById("loginPanel");
+const dashboard = document.getElementById("dashboard");
+const notice = document.getElementById("notice");
+
+document.getElementById("loginBtn").addEventListener("click", login);
+document.getElementById("logoutBtn").addEventListener("click", logout);
+document.getElementById("search").addEventListener("input", renderApplications);
+document.getElementById("statusFilter").addEventListener("change", renderApplications);
+
+async function login() {
+    notice.textContent = "Signing in...";
+
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+
+    const { data, error } = await db.auth.signInWithPassword({
+        email,
+        password
+    });
+
+    if (error) {
+        notice.textContent = "Login failed: " + error.message;
+        return;
+    }
+
+    if (data.user.id !== ADMIN_UID) {
+        await db.auth.signOut();
+        notice.textContent = "Access denied. This account is not an authorized admin.";
+        return;
+    }
+
+    notice.textContent = "";
+    loginPanel.style.display = "none";
+    dashboard.style.display = "block";
+    document.getElementById("logoutBtn").style.display = "block";
+
+    await loadApplications();
+}
+
+async function logout() {
+    await db.auth.signOut();
+    location.reload();
+}
+
+async function loadApplications() {
+    document.getElementById("listNotice").textContent = "Loading applications...";
+
+    const { data, error } = await db
+        .from("athlete_applications")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+    if (error) {
+        document.getElementById("listNotice").textContent =
+            "Could not load applications: " + error.message;
+        return;
+    }
+
+    allApplications = data || [];
+    updateStats();
+    renderApplications();
+}
+
+function updateStats() {
+    document.getElementById("total").textContent = allApplications.length;
+    document.getElementById("pending").textContent =
+        allApplications.filter(a => a.status === "pending").length;
+    document.getElementById("approved").textContent =
+        allApplications.filter(a => a.status === "approved").length;
+    document.getElementById("rejected").textContent =
+        allApplications.filter(a => a.status === "rejected").length;
+}
+
+function renderApplications() {
+    const search = document.getElementById("search").value.toLowerCase();
+    const filter = document.getElementById("statusFilter").value;
+    const tbody = document.getElementById("applications");
+
+    tbody.replaceChildren();
+
+    const filtered = allApplications.filter(a => {
+        const matchesSearch =
+            (a.applicant_name || "").toLowerCase().includes(search) ||
+            (a.sport || "").toLowerCase().includes(search);
+
+        return matchesSearch && (filter === "all" || a.status === filter);
+    });
+
+    document.getElementById("listNotice").textContent =
+        filtered.length + " application(s) found.";
+
+    filtered.forEach(a => {
+        const tr = document.createElement("tr");
+
+        const values = [
+            a.applicant_name,
+            a.sport,
+            a.state,
+            a.created_at ? new Date(a.created_at).toLocaleDateString() : "",
+            a.status
+        ];
+
+        values.forEach(value => {
+            const td = document.createElement("td");
+            td.textContent = value || "-";
+            tr.appendChild(td);
+        });
+
+        const action = document.createElement("td");
+        const view = document.createElement("button");
+        view.textContent = "VIEW";
+        view.addEventListener("click", () => showDetails(a));
+        action.appendChild(view);
+
+        const status = document.createElement("select");
+        ["pending", "reviewing", "approved", "rejected"].forEach(s => {
+            const option = document.createElement("option");
+            option.value = s;
+            option.textContent = s.toUpperCase();
+            status.appendChild(option);
+        });
+        status.value = a.status;
+
+        status.addEventListener("change", () => updateStatus(a.id, status.value));
+        action.appendChild(status);
+        tr.appendChild(action);
+
+        tbody.appendChild(tr);
+    });
+}
+
+function showDetails(a) {
+    const panel = document.getElementById("detailsPanel");
+    const container = document.getElementById("details");
+    container.replaceChildren();
+
+    const fields = [
+        ["Name", a.applicant_name],
+        ["Date of birth", a.date_of_birth],
+        ["Gender", a.gender],
+        ["Phone", a.phone],
+        ["Email", a.email],
+        ["State", a.state],
+        ["District", a.district],
+        ["PIN code", a.pin_code],
+        ["Category", a.sport_category],
+        ["Sport", a.sport],
+        ["Position / Event", a.position_or_event],
+        ["Experience", a.experience],
+        ["Academy / Club", a.school_academy_club],
+        ["Coach", a.coach_name],
+        ["Achievements", a.achievements],
+        ["Performance video", a.performance_video],
+        ["Goals", a.goals],
+        ["Guardian consent", a.parent_guardian_consent ? "Yes" : "No"]
+    ];
+
+    fields.forEach(([label, value]) => {
+        const p = document.createElement("p");
+        const strong = document.createElement("strong");
+        strong.textContent = label + ": ";
+        p.appendChild(strong);
+        p.appendChild(document.createTextNode(value || "-"));
+        container.appendChild(p);
+    });
+
+    panel.style.display = "block";
+    panel.scrollIntoView({ behavior: "smooth" });
+}
+
+async function updateStatus(id, newStatus) {
+    const { error } = await db
+        .from("athlete_applications")
+        .update({ status: newStatus })
+        .eq("id", id);
+
+    if (error) {
+        alert("Status update failed: " + error.message);
+        await loadApplications();
+        return;
+    }
+
+    alert("Application status updated successfully.");
+    await loadApplications();
+}
+</script>
+</body>
+</html>
+
